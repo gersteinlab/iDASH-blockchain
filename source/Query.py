@@ -1,21 +1,26 @@
 
 '''
 to do:
-- handle no input? 
+- handle no filters?
+- handle just -st -et?
 '''
 
 '''
-zQuery.py
+Query.py
 Queries an existing stream from a loaded multichain chain.
 Written in python 2.7
 
-SYNTAX:
-On command line (OCL): python zQuery.py -cn/--chainName [chain name] -sn/--streamName [stream name] [--queryflag query] 
+Multichain chain and stream name are supplied via environment variables. They default to chain1, stream1.
+export CHAIN=chain1
+export STREAM=stream1
 
-OCL example: python zFunctionalQuery.py --chainName testingChain -streamName testingStream -resource mod_flybase
-OCL example2:python zFunctionalQuery.py -cn testingChain -sn testingStream -user 1 -activity file_access
-OCL example3:python zFunctionalQuery.py -cn testingChain -sn testingStream -u 1 -a file_access -ob asc
-OCL example4:python zFunctionalQuery.py -cn testingChain -sn testingStream -u 1 -a file_access -orderBy ascending
+SYNTAX:
+On command line (OCL): python Query.py -cn/--chainName [chain name] -sn/--streamName [stream name] [--queryflag query] 
+
+OCL example: python Query.py --resource mod_flybase
+OCL example2:python Query.py --user 1 --activity file_access
+OCL example3:python Query.py -u 1 -a file_access -ob asc
+OCL example4:python Query.py -u 1 -a file_access -orderBy ascending
 
 queryflag options (can use short or long flag)
 -cn or --chainName
@@ -30,25 +35,16 @@ queryflag options (can use short or long flag)
 -r or --resource
 -sb or --sortBy
 -ob or --orderBy
-ts or --timestamp
-
+-ts or --timestamp
 
 Interactive Mode (IM): 
-To get to interactive mode from shell/terminal, first run python -i zQuery.py -cn [chain name] -sn [stream name]
+To get to interactive mode from shell/terminal, first run python -i Query.py 
 
-***Once in interactive mode, can use only long flags without '-' ***
-
-Once in interactive mode: rows.query('queryflag query') 
-
-IM example: rows.query('user 1')
-IM example2:rows.query('refid 9')
-IM example3:rows.query('node 1 activity req_resource')  
-
+Then just type in a query using the same syntax as above:
+> -u 6 -n 5 -et 1522429976475
 
 Help: 
-python zFunctionalQuery.py -h 
-	OR
-python zFunctionalQuery.py --help
+python Query.py --help
 '''
 
 
@@ -61,11 +57,8 @@ import pandas as pd
 
 columns=['TIMESTAMP','NODE','ID','REFID','USER','ACTIVITY','RESOURCE']
 
-	################### Parses user-supplied arguments ###################
+################### Parses user-supplied arguments ###################
 parser=argparse.ArgumentParser()
-# required multichain options
-parser.add_argument('-cn','--chainName', dest='chainName', required=True, help='The name of the chain to be queried')
-parser.add_argument('-sn','--streamName', dest='streamName', required=True, help='The name of the data stream to be queried')
 
 # timestamp filtering
 parser.add_argument('-st','--startTime', type=int, dest='startTime',default=-sys.maxint, help='Unix timestamp start time of query')
@@ -87,6 +80,10 @@ parser.add_argument('-ob','--orderBy',dest='orderBy',default='asc',help='Sort da
 def Query(qstr):
         subqueries=[]
         o=parser.parse_args(qstr)
+
+        chainName = os.getenv("CHAIN", "chain1")
+        streamName = os.getenv("STREAM", "stream1")
+
         if o.timestamp: subqueries.append('T:{}'.format(o.timestamp))
         if o.node:      subqueries.append('N:{}'.format(o.node))
         if o.id:        subqueries.append('I:{}'.format(o.id))
@@ -102,14 +99,14 @@ def Query(qstr):
         logf=open("Query.log", "w+")
         txids=[]
         for sq in subqueries:
-                cmd='multichain-cli {} liststreamkeyitems {} {} false 100000'.format(o.chainName, o.streamName, sq)
+                cmd='multichain-cli {} liststreamkeyitems {} {} false 100000'.format(chainName, streamName, sq)
                 recs=json.loads(subprocess.check_output(cmd, shell=True, stderr=logf))
                 # txids is a list of sets, each holding all the txids found for that query, e.g. -u 9
                 txids.append(set([r['data'] for r in recs]))
         matching_txids=reduce(set.intersection, txids)
         results=[]
         for txid in matching_txids:
-                cmd='multichain-cli {} getstreamitem {} {}'.format(o.chainName, o.streamName, txid)
+                cmd='multichain-cli {} getstreamitem {} {}'.format(chainName, streamName, txid)
                 rec=json.loads(subprocess.check_output(cmd, shell=True, stderr=logf))
                 flds=rec['data'].decode("hex").split(":")
                 timestamp=int(flds[0])
@@ -120,11 +117,9 @@ def Query(qstr):
         if o.sortBy: df.sort_values(by=o.sortBy, ascending=(o.orderBy=='asc'), inplace=True)
         return df
 
+# test driver
 if __name__=='__main__':
-        # this is an initial test parse; we'll reparse later if all is good
-        o=parser.parse_args()
-        
-        if len(sys.argv)>5: # non-interactive mode
+        if len(sys.argv)>1: # non-interactive mode
                 df=Query(sys.argv[1:])
                 print(df)
                 print("\n{} rows".format(len(df)))
@@ -133,11 +128,6 @@ if __name__=='__main__':
                 while True:
                         q=raw_input('> ')
                         # prepend the chain and stream args from the original invocation
-                        df=Query(sys.argv[1:]+q.split())
+                        df=Query(q.split())
                         print(df)
                         print("\n{} rows".format(len(df)))
-                        
-                        
-#res=Query("-cn chain1 -sn stream1 -u 6 -sb TIMESTAMP")
-#print(res)
-#Query("-cn chain1 -sn stream1 -u 6 -i 5")

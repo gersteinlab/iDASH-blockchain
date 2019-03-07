@@ -5,66 +5,18 @@ to do:
 '''
 
 '''
-zQuery.py
-Queries an existing stream from a loaded multichain chain.
-Written in python 2.7
-
-SYNTAX:
-On command line (OCL): python zQuery.py -cn/--chainName [chain name] -sn/--streamName [stream name] [--queryflag query] 
-
-OCL example: python zFunctionalQuery.py --chainName testingChain -streamName testingStream -resource mod_flybase
-OCL example2:python zFunctionalQuery.py -cn testingChain -sn testingStream -user 1 -activity file_access
-OCL example3:python zFunctionalQuery.py -cn testingChain -sn testingStream -u 1 -a file_access -ob asc
-OCL example4:python zFunctionalQuery.py -cn testingChain -sn testingStream -u 1 -a file_access -orderBy ascending
-
-queryflag options (can use short or long flag)
--cn or --chainName
--sn or --streamName
--st or --startTime
--et or --endTime
--n or --node
--i or --id
--rd or --refid
--u or --user
--a  or --activity
--r or --resource
--sb or --sortBy
--ob or --orderBy
-ts or --timestamp
-
-
-Interactive Mode (IM): 
-To get to interactive mode from shell/terminal, first run python -i zQuery.py -cn [chain name] -sn [stream name]
-
-***Once in interactive mode, can use only long flags without '-' ***
-
-Once in interactive mode: rows.query('queryflag query') 
-
-IM example: rows.query('user 1')
-IM example2:rows.query('refid 9')
-IM example3:rows.query('node 1 activity req_resource')  
-
-
-Help: 
-python zFunctionalQuery.py -h 
-	OR
-python zFunctionalQuery.py --help
+This script emulates what Query.py does by simply reading in the data, creating a pandas df, and using pandas to
+perform the query.  It is used to validate the multichain query.
 '''
-
 
 import argparse
 import sys
-import os
-import subprocess
-import json
 import pandas as pd
 
 columns=['TIMESTAMP','NODE','ID','REFID','USER','ACTIVITY','RESOURCE']
 
-	################### Parses user-supplied arguments ###################
+################### Parses user-supplied arguments ###################
 parser=argparse.ArgumentParser()
-# required multichain options
-parser.add_argument('-fn','--filename', dest='fileName', required=True, help='The name of the chain to be queried')
 
 # timestamp filtering
 parser.add_argument('-st','--startTime', type=int, dest='startTime',default=-sys.maxint, help='Unix timestamp start time of query')
@@ -83,45 +35,48 @@ parser.add_argument('-t','--timestamp'.upper(), dest='timestamp', required=False
 parser.add_argument('-sb','--sortBy',dest='sortBy',default=None,help='Sort data by a specific column')
 parser.add_argument('-ob','--orderBy',dest='orderBy',default='asc',help='Sort data in ascending or descending order')
 
-def Query(qstr, df):
-        subqueries=[]
-        o=parser.parse_args(qstr)
-        if o.timestamp: subqueries.append('TIMESTAMP == {}'.format(o.timestamp))
-        if o.node:      subqueries.append('NODE == {}'.format(o.node))
-        if o.id:        subqueries.append('ID == {}'.format(o.id))
-        if o.refid:     subqueries.append('REFID == {}'.format(o.refid))
-        if o.user:      subqueries.append('USER == {}'.format(o.user))
-        if o.activity:  subqueries.append('ACTIVITY == "{}"'.format(o.activity))
-        if o.resource:  subqueries.append('RESOURCE == "{}"'.format(o.resource))
+class Query():
+        def __init__(self, fn):
+                self.df=pd.read_csv(fn, sep='\t', names=columns)
+                
+        def query(self, qstr):
+                subqueries=[]
+                o=parser.parse_args(qstr)
+                if o.timestamp: subqueries.append('TIMESTAMP == {}'.format(o.timestamp))
+                if o.node:      subqueries.append('NODE == {}'.format(o.node))
+                if o.id:        subqueries.append('ID == {}'.format(o.id))
+                if o.refid:     subqueries.append('REFID == {}'.format(o.refid))
+                if o.user:      subqueries.append('USER == {}'.format(o.user))
+                if o.activity:  subqueries.append('ACTIVITY == "{}"'.format(o.activity))
+                if o.resource:  subqueries.append('RESOURCE == "{}"'.format(o.resource))
+                
+                if o.startTime: subqueries.append('TIMESTAMP >= {}'.format(o.startTime))
+                if o.endTime:   subqueries.append('TIMESTAMP <= {}'.format(o.endTime))
 
-        if o.startTime: subqueries.append('TIMESTAMP >= {}'.format(o.startTime))
-        if o.endTime:   subqueries.append('TIMESTAMP <= {}'.format(o.endTime))
+                if not subqueries:
+                        print("Error: you must provide at least one query element")
+                        sys.exit(1)
 
-        if not subqueries:
-                print("Error: you must provide at least one query element")
-                sys.exit(1)
+                query = ' and '.join(subqueries)
+                res=self.df.query(query)
+                
+                if o.sortBy:
+                        res.sort_values(by='{}'.format(o.sortBy), ascending=(o.orderBy == 'asc'), inplace=True)
 
-        query = ' and '.join(subqueries)
-        print(query)
-        res=df.query(query)
-        if o.sortBy:
-                res.sort_values(by='{}'.format(o.sortBy), ascending=(o.orderBy == 'asc'), inplace=True)
-        print(res)
-        print("\n{} rows".format(len(res)))
+                return res
 
+# test driver
 if __name__=='__main__':
-        # this is an initial test parse; we'll reparse later if all is good
+
+        Q=Query(sys.argv[1])
         
-        o=parser.parse_args()
-        df=pd.read_csv(o.fileName, sep='\t', names=columns)
-        
-        if len(sys.argv)>3: # non-interactive mode
-                print(Query(sys.argv[1:], df))
+        if len(sys.argv)>2: # non-interactive mode
+                print(Q.query(sys.argv[2:]))
         else:
                 while True:
                         q=raw_input('> ')
                         print(q)
                         # prepend the chain and stream args from the original invocation
-                        print(Query(sys.argv[1:]+q.split(), df))
+                        print(Q.query(q.split()))
                         
 
