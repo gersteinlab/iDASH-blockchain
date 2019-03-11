@@ -12,5 +12,6 @@ for test in open(testFile):
     q=test.strip().split()
     pdres=len(PQ.query(q))
     mcres = len(Q.Query(q))
+    print(test)
     if pdres != mcres:
-        print ("{}: {} {}".format(q, pdres, mcres))
+        print ("ERROR! {}: {} {}".format(q, pdres, mcres))

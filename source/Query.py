@@ -55,6 +55,8 @@ import subprocess
 import json
 import pandas as pd
 
+import utils
+
 columns=['TIMESTAMP','NODE','ID','REFID','USER','ACTIVITY','RESOURCE']
 
 ################### Parses user-supplied arguments ###################
@@ -97,20 +99,20 @@ def Query(qstr):
                 sys.exit(1)
 
         logf=open("Query.log", "w+")
-        txids=[]
+        ts_txids=[]
         for sq in subqueries:
                 cmd='multichain-cli {} liststreamkeyitems {} {} false 100000'.format(chainName, streamName, sq)
                 recs=json.loads(subprocess.check_output(cmd, shell=True, stderr=logf))
-                # txids is a list of sets, each holding all the txids found for that query, e.g. -u 9
-                txids.append(set([r['data'] for r in recs]))
-        matching_txids=reduce(set.intersection, txids)
+                # ts_txids is a list of sets, each holding all the ts_txids found for that query, e.g. -u 9
+                ts_txids.append(set([r['data'] for r in recs]))
+        matching_ts_txids=reduce(set.intersection, ts_txids)
         results=[]
-        for txid in matching_txids:
-                cmd='multichain-cli {} getstreamitem {} {}'.format(chainName, streamName, txid)
-                rec=json.loads(subprocess.check_output(cmd, shell=True, stderr=logf))
-                flds=rec['data'].decode("hex").split(":")
-                timestamp=int(flds[0])
-                if o.startTime <= timestamp and timestamp <= o.endTime:
+        for ts_txid in matching_ts_txids:
+                ts, txid=utils.getTimestamp(ts_txid)
+                if o.startTime <= int(ts) and int(ts) <= o.endTime:
+                        cmd='multichain-cli {} getstreamitem {} {}'.format(chainName, streamName, txid)
+                        rec=json.loads(subprocess.check_output(cmd, shell=True, stderr=logf))
+                        flds=rec['data'].decode("hex").split(":")
                         results.append(flds)
 
         df=pd.DataFrame(results, columns=columns)
