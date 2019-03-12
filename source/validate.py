@@ -5,13 +5,21 @@ import Query as Q
 dataFile=sys.argv[1]
 testFile=sys.argv[2]
 
+# first count the lines
+lines=0
+for l in open(testFile):
+    lines+=1
+
 PQ=P.Query(dataFile)
     
-for test in open(testFile):
+for i, test in enumerate(open(testFile)):
     if test.startswith("#"): continue
-    q=test.strip().split()
+    test=test.strip()
+    q=test.split()
     pdres=len(PQ.query(q))
     mcres = len(Q.Query(q))
-    print(test)
-    if pdres != mcres:
-        print ("ERROR! {}: {} {}".format(q, pdres, mcres))
+
+    print("{} {} {}".format(mcres, pdres, test))
+    #sys.stdout.write('\r{0:12}:{1:12}'.format(i, lines))
+    if mcres != pdres:
+        print ("ERROR! {}: {} {}".format(q, mcres, pdres))
