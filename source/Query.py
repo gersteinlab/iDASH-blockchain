@@ -99,15 +99,17 @@ def Query(qstr):
                 sys.exit(1)
 
         logf=open("Query.log", "w+")
-        ts_txids=[]
+        ts_txids=None
         for sq in subqueries:
                 cmd='multichain-cli {} liststreamkeyitems {} {} false 100000'.format(chainName, streamName, sq)
                 recs=json.loads(subprocess.check_output(cmd, shell=True, stderr=logf))
                 # ts_txids is a list of sets, each holding all the ts_txids found for that query, e.g. -u 9
-                ts_txids.append(set([r['data'] for r in recs]))
-        matching_ts_txids=reduce(set.intersection, ts_txids)
+                if ts_txids:
+                        ts_txids=ts_txids.intersection(set([r['data'] for r in recs]))
+                else:
+                        ts_txids=set([r['data'] for r in recs])
         results=[]
-        for ts_txid in matching_ts_txids:
+        for ts_txid in ts_txids:
                 ts, txid=utils.getTimestamp(ts_txid)
                 if o.startTime <= int(ts) and int(ts) <= o.endTime:
                         cmd='multichain-cli {} getstreamitem {} {}'.format(chainName, streamName, txid)
